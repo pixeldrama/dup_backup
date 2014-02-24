@@ -1,70 +1,83 @@
 #!/bin/bash
 
-export PASSPHRASE=<passphrase>
-USER=<unix user>
-BACKUP_PATH=<path>
-LOG_FILE=<path to logging file>
+# the hardcoded key for the encrypted backup.
+export PASSPHRASE=""
+
+# backup path, which determines also the protocol
+BACKUP_PATH=""
+
+# path for log file
+LOG_FILE=""
+
+# noise in the log value: 0-9
 LEVEL=4
 
 function backup() {
 
     DATE=$(date)
-    echo "NOTICE 1 started backup ${DATE}" >> $LOG_FILE
+    # echo "NOTICE 1 started backup ${DATE}" >> $LOG_FILE
 
     # in fact do the backup
     duplicity \
-        --log-file $LOG_FILE \
-        --full-if-older-than 2W \
-        --verbosity $LEVEL \
-        # --exclude=/home/$USER/.gvfs \ 
-    /home/$USER/ $BACKUP_PATH
+	--full-if-older-than 2W \
+	--verbosity $LEVEL \
+	--log-file $LOG_FILE \
+	/home/$USER/ $BACKUP_PATH
 
     # remove very old backups
     duplicity remove-older-than 6M \
-        --verbosity $LEVEL \
-        --force \
-        $BACKUP_PATH
+	--verbosity $LEVEL \
+	--force \
+	--log-file $LOG_FILE \
+	$BACKUP_PATH
 
     #clean up
-    duplicity cleanup --force $BACKUP_PATH
+    duplicity cleanup --force 	--log-file $LOG_FILE $BACKUP_PATH 
 
     DATE=$(date)
-    echo "NOTICE 1 finished backup ${DATE}" >> $LOG_FILE
+    # echo "NOTICE 1 finished backup ${DATE}" >> $LOG_FILE
 }
 
-# check if an instance of duplicity is running
-PID_DUPLICITY=$(pgrep duplicity)
-if [ "$PID_DUPLICITY" != "" ]
-then
-    notify-send "duplicity is already running under ${PID_DUPLICITY}"
-    exit 1
-fi
+case "$1" in
+start)
 
-# check, if backup directory is mounted
-MOUNT_DIR=$(mount | grep ${BACKUP_PATH##*///})
-if [ "$MOUNT_DIR" = "" ]
-then
-    notify-send "try to mount $MOUNT_DIR"
+	#create log path?
+	if [ ! -e "$LOG_FILE" ]
+	then
+	    sudo mkdir -p "$LOG_FILE"
+	fi
 
-    mount -av
-    MOUNT_DIR=$(mount | grep ${BACKUP_PATH##*///})    
+	# check if an instance of duplicity is running
+	PID_DUPLICITY=$(pgrep duplicity)
+	if [ "$PID_DUPLICITY" != "" ]
+	then
+	    echo "duplicity is already running under ${PID_DUPLICITY}"
+	    exit 1
+	fi
 
-    if [ "$MOUNT_DIR" = "" ]
-    then
-        notify-send "mounting $MOUNT_DIR failed"
-        exit 1
-    fi
-fi
 
-# check if somebody is at home
-IS_LOGGED=$(who | grep $USER)
-if [ "$IS_LOGGED" != "" ]
-then
-    notify-send "start backup"
-    backup
-    notify-send "backup finished"
-    exit 0
-else
-    echo "${user} is not logged in"
-    exit 1
-fi
+	# check if somebody is at home
+	IS_LOGGED=$(who | grep $USER)
+	if [ "$IS_LOGGED" != "" ]
+	then
+	    echo "start backup"
+	    backup
+	    echo "backup finished"
+	    exit 0
+	else
+	    echo "${user} is not logged in"
+	    exit 1
+	fi
+	;;
+list)
+	duplicity collection-status  --log-file $LOG_FILE $BACKUP_PATH	
+	;;
+    *)
+	
+	# print the message into the log file
+	echo "usage: start|list" >> $LOG_FILE
+
+	# print the messag to stdout
+	echo "usage: start|list"
+	;;
+esac
