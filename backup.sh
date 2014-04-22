@@ -6,8 +6,13 @@ export PASSPHRASE=""
 # backup path, which determines also the protocol
 BACKUP_PATH=""
 
-# path for log file
-LOG_FILE=""
+# path of log file
+LOG_PATH=/home/$USER/.local/log/
+
+# name of log file
+LOG_FILE=duplicity.log
+
+LOG=$LOG_PATH/$LOG_FILE
 
 # noise in the log value: 0-9
 LEVEL=4
@@ -19,48 +24,67 @@ function backup() {
 
     # in fact do the backup
     duplicity \
+	--no-encryption \
 	--full-if-older-than 2W \
 	--verbosity $LEVEL \
-	--log-file $LOG_FILE \
+	--log-file $LOG \
 	/home/$USER/ $BACKUP_PATH
 
     # remove very old backups
     duplicity remove-older-than 6M \
 	--verbosity $LEVEL \
 	--force \
-	--log-file $LOG_FILE \
+	--log-file $LOG \
 	$BACKUP_PATH
 
     #clean up
-    duplicity cleanup --force 	--log-file $LOG_FILE $BACKUP_PATH 
+    duplicity cleanup --force --log-file $LOG $BACKUP_PATH
 
     DATE=$(date)
     # echo "NOTICE 1 finished backup ${DATE}" >> $LOG_FILE
 }
 
+function log() {
+   echo $1
+   echo $1 >> $LOG
+}
+
+#create log path?
+if [ ! -e "$LOG_FILE" ]
+then
+    mkdir -p $LOG_PATH
+    cd $LOG_PATH
+    touch $LOG_FILE
+    cd $HOME
+    log "created log path $LOG_FILE"
+fi
+
 case "$1" in
 start)
-
-	#create log path?
-	if [ ! -e "$LOG_FILE" ]
-	then
-	    sudo mkdir -p "$LOG_FILE"
-	fi
 
 	# check if an instance of duplicity is running
 	PID_DUPLICITY=$(pgrep duplicity)
 	if [ "$PID_DUPLICITY" != "" ]
 	then
-	    echo "duplicity is already running under ${PID_DUPLICITY}"
+	    log "duplicity is already running under ${PID_DUPLICITY}"
 	    exit 1
 	fi
 
+
+	# delete logfile
+	LOCK_FILE=$(find "/home/$USER/.cache/duplicity/" -type f -name "lockfile.lock")
+
+	if [ "$LOCK_FILE" != "" ]
+	then
+	    log "delete $LOCK_FILE"
+	    rm $LOCK_FILE
+	fi
 
 	# check if somebody is at home
 	IS_LOGGED=$(who | grep $USER)
 	if [ "$IS_LOGGED" != "" ]
 	then
-	    echo "start backup"
+	    log "start backup"
 	    backup
 	    echo "backup finished"
 	    exit 0
@@ -74,10 +98,6 @@ list)
 	;;
     *)
 	
-	# print the message into the log file
-	echo "usage: start|list" >> $LOG_FILE
-
-	# print the messag to stdout
-	echo "usage: start|list"
+	log "usage: start|list"
 	;;
 esac
