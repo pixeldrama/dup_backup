@@ -24,7 +24,6 @@ function backup() {
 
     # in fact do the backup
     duplicity \
-	--no-encryption \
 	--full-if-older-than 2W \
 	--verbosity $LEVEL \
 	--log-file $LOG \
